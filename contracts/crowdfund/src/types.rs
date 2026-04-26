@@ -85,6 +85,40 @@ pub struct CampaignInfo {
     pub platform_address: Address,
 }
 
+/// Campaign update entry with IPFS hash and timestamp.
+#[derive(Clone)]
+#[contracttype]
+pub struct CampaignUpdate {
+    /// IPFS hash of the update content
+    pub ipfs_hash: String,
+    /// Timestamp when update was posted
+    pub timestamp: u64,
+}
+
+/// Milestone tracking for campaigns.
+#[derive(Clone)]
+#[contracttype]
+pub struct Milestone {
+    /// Target amount in stroops
+    pub amount: i128,
+    /// Milestone description
+    pub description: String,
+    /// Whether this milestone has been reached
+    pub reached: bool,
+}
+
+/// Matching configuration for sponsor contributions.
+#[derive(Clone)]
+#[contracttype]
+pub struct MatchingConfig {
+    /// Sponsor address providing matching funds
+    pub sponsor: Address,
+    /// Match ratio in basis points (e.g., 10000 = 1:1 match)
+    pub match_ratio: u32,
+    /// Maximum total matching amount in stroops
+    pub max_match: i128,
+}
+
 /// Storage key variants for contract data.
 ///
 /// Used to organize persistent and instance storage in the contract.
