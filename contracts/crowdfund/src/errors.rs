@@ -76,4 +76,6 @@ pub enum ContractError {
     InsufficientFunds = 32,
     /// Caller is not authorized for this operation
     Unauthorized = 33,
+    /// Required multi-sig approvals not met for emergency withdrawal
+    MultiSigNotMet = 34,
 }
