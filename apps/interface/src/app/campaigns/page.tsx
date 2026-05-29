@@ -20,6 +20,8 @@ import { ShareModal } from "@/components/ui/ShareModal";
 import { SearchSuggestions } from "@/components/ui/SearchSuggestions";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import type { SearchSuggestion } from "@/hooks/useSearchSuggestions";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { BreadcrumbProvider } from "@/context/BreadcrumbContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -591,17 +593,23 @@ export function CampaignsInner() {
 
 export default function DiscoveryPage() {
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white">
-      <Navbar />
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">Discover Campaigns</h1>
-        <p className="text-gray-500 mb-8">
-          Find and support causes that matter to you
-        </p>
-        <Suspense fallback={<LoadingSkeletonGrid count={6} />}>
-          <CampaignsInner />
-        </Suspense>
-      </div>
-    </main>
+    <BreadcrumbProvider>
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white">
+        <Navbar />
+        <div className="max-w-6xl mx-auto px-6 py-12">
+          <Breadcrumb
+            crumbs={[{ label: "Campaigns" }]}
+            className="mb-4 text-gray-500"
+          />
+          <h1 className="text-3xl font-bold mb-2">Discover Campaigns</h1>
+          <p className="text-gray-500 mb-8">
+            Find and support causes that matter to you
+          </p>
+          <Suspense fallback={<LoadingSkeletonGrid count={6} />}>
+            <CampaignsInner />
+          </Suspense>
+        </div>
+      </main>
+    </BreadcrumbProvider>
   );
 }

@@ -10,6 +10,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ErrorHandlerInitializer } from "@/components/ErrorHandlerInitializer";
 import { ModalProvider } from "@/context/ModalContext";
 import { SkipNav } from "@/components/ui/SkipNav";
+import { BreadcrumbProvider } from "@/context/BreadcrumbContext";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import { rtlLocales, type Locale } from "@/i18n/config";
@@ -50,7 +51,9 @@ export default async function LocaleLayout({
                   <NotificationProvider>
                     <ComparisonProvider>
                       <BookmarkProvider>
-                        <WalletProvider>{children}</WalletProvider>
+                        <BreadcrumbProvider>
+                          <WalletProvider>{children}</WalletProvider>
+                        </BreadcrumbProvider>
                       </BookmarkProvider>
                     </ComparisonProvider>
                   </NotificationProvider>

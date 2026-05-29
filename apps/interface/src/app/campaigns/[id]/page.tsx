@@ -19,6 +19,8 @@ import {
 } from "@/lib/constants";
 import { CampaignActions } from "./CampaignActions";
 import { CampaignDetailContent } from "./CampaignDetailContent";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { BreadcrumbProvider } from "@/context/BreadcrumbContext";
 
 // ── Static Generation (SSG + ISR) ─────────────────────────────────────────────
 
@@ -99,6 +101,7 @@ export default async function CampaignDetailPage({
   const goalMet = campaign.raised >= campaign.goal;
 
   return (
+    <BreadcrumbProvider>
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white">
       <Navbar />
 
@@ -115,6 +118,13 @@ export default async function CampaignDetailPage({
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+        <Breadcrumb
+          crumbs={[
+            { label: "Campaigns", href: "/campaigns" },
+            { label: campaign.title },
+          ]}
+          className="text-gray-500"
+        />
         {/* Title + creator */}
         <div>
           <h1 className="text-3xl font-bold mb-2">{campaign.title}</h1>
@@ -206,5 +216,6 @@ export default async function CampaignDetailPage({
       </div>
       <CampaignDetailContent contractId={id} />
     </main>
+    </BreadcrumbProvider>
   );
 }
