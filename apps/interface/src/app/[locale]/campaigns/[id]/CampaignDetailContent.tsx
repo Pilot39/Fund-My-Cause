@@ -24,6 +24,7 @@ import { GoalSuccessModal } from "@/components/ui/GoalSuccessModal";
 import { GoalSuccessBadge } from "@/components/ui/GoalSuccessBadge";
 import { ShareModal } from "@/components/ui/ShareModal";
 import { PausedBanner } from "@/components/ui/PausedBanner";
+import { CampaignAnalytics } from "@/components/ui/CampaignAnalytics";
 
 function ContractIdRow({ contractId }: { contractId: string }) {
   const [copied, setCopied] = useState(false);
@@ -216,6 +217,8 @@ export function CampaignDetailContent({ contractId }: { contractId: string }) {
             <p className="mt-1 text-xs text-gray-500">Remaining</p>
           </div>
         </div>
+
+        <CampaignAnalytics stats={stats} info={info} />
 
         <p className="leading-relaxed text-gray-700 dark:text-gray-300">
           {info.description}
