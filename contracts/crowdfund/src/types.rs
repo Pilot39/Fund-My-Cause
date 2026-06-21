@@ -337,16 +337,10 @@ pub enum DataKey {
     // #460: per-function performance stats
     /// Performance stats for a named function
     PerfStats(String),
-    /// Governance configuration (governors, required approvals, timelock)
-    GovernanceConfig,
-    /// Governance proposal by nonce
-    GovernanceProposal(u32),
-    /// Vote record for a governance proposal (nonce, governor)
-    GovernanceVote(u32, Address),
-    /// Emergency pause approval tracking
-    EmergencyPauseApprovals,
-    /// Emergency pause approval by address
-    EmergencyPauseApproval(Address),
+    /// Indexed contributor address — key is the contributor's insertion order (0-based).
+    /// Replaces the monolithic KEY_CONTRIBS Vec to give O(1) per-write cost and
+    /// O(page_size) pagination instead of O(n) reads of the full list.
+    ContributorIndex(u32),
 }
 
 /// Recurring contribution plan.

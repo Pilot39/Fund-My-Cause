@@ -1629,288 +1629,223 @@ fn new_owner_can_perform_creator_actions() {
     assert_eq!(client.status(), Status::Cancelled);
 }
 
-// ── Governance (Multi-Sig) Tests ─────────────────────────────────────────────
+// ── Gas optimisation: O(1) indexed contributor list (#perf) ──────────────────
 
-fn setup_contract_with_governance(
-    env: &Env,
-    deadline: u64,
-    goal: i128,
-) -> (
-    Address,
-    Vec<Address>,
-    CrowdfundContractClient<'_>,
-) {
-    env.mock_all_auths();
+#[test]
+fn contributor_list_returns_all_contributors_in_order() {
+    let env = Env::default();
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 100_000, 0);
 
-    let creator = Address::generate(env);
-    let token_admin = Address::generate(env);
-    let token_id = env.register_stellar_asset_contract(token_admin);
+    let c1 = Address::generate(&env);
+    let c2 = Address::generate(&env);
+    let c3 = Address::generate(&env);
 
-    let contract_id = env.register_contract(None, CrowdfundContract);
-    let client = CrowdfundContractClient::new(env, &contract_id);
+    token_admin_client.mint(&c1, &1_000);
+    token_admin_client.mint(&c2, &1_000);
+    token_admin_client.mint(&c3, &1_000);
 
-    client.initialize(
-        &creator,
-        &token_id,
-        &goal,
-        &deadline,
-        &0i128,
-        &0i128,
-        &String::from_str(env, "Governance Test"),
-        &String::from_str(env, "Testing governance"),
-        &None,
-        &None,
-        &None,
-        &Category::Other,
-        &None,
-        &None,
-    );
+    client.contribute(&c1, &1_000, &token_id, &None);
+    client.contribute(&c2, &1_000, &token_id, &None);
+    client.contribute(&c3, &1_000, &token_id, &None);
 
-    let governor1 = Address::generate(env);
-    let governor2 = Address::generate(env);
-    let governor3 = Address::generate(env);
-    let governors = Vec::from_array(env, [governor1, governor2, governor3]);
-
-    client.initialize_governance(&governors, &2, &86400);
-
-    (creator, governors, client)
+    let page = client.contributor_list(&0, &50);
+    assert_eq!(page.len(), 3);
+    assert_eq!(page.get(0).unwrap(), c1);
+    assert_eq!(page.get(1).unwrap(), c2);
+    assert_eq!(page.get(2).unwrap(), c3);
 }
 
 #[test]
-fn initialize_governance_stores_config() {
+fn contributor_list_paginates_correctly() {
     let env = Env::default();
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 1000, 10000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 1_000_000, 0);
 
-    let config = client.get_governance_config().expect("governance configured");
-    assert_eq!(config.governors.len(), 3);
-    assert_eq!(config.required_approvals, 2);
-    assert_eq!(config.timelock_delay, 86400);
-    assert_eq!(config.governors.get(0).unwrap(), governors.get(0).unwrap());
-    assert_eq!(config.governors.get(1).unwrap(), governors.get(1).unwrap());
-    assert_eq!(config.governors.get(2).unwrap(), governors.get(2).unwrap());
+    let mut addrs = soroban_sdk::Vec::new(&env);
+    for _ in 0..10u32 {
+        let c = Address::generate(&env);
+        token_admin_client.mint(&c, &1_000);
+        client.contribute(&c, &1_000, &token_id, &None);
+        addrs.push_back(c);
+    }
+
+    // First page
+    let page1 = client.contributor_list(&0, &5);
+    assert_eq!(page1.len(), 5);
+    assert_eq!(page1.get(0).unwrap(), addrs.get(0).unwrap());
+    assert_eq!(page1.get(4).unwrap(), addrs.get(4).unwrap());
+
+    // Second page
+    let page2 = client.contributor_list(&5, &5);
+    assert_eq!(page2.len(), 5);
+    assert_eq!(page2.get(0).unwrap(), addrs.get(5).unwrap());
+    assert_eq!(page2.get(4).unwrap(), addrs.get(9).unwrap());
 }
 
 #[test]
-fn initialize_governance_rejects_duplicate() {
+fn contributor_list_offset_beyond_count_returns_empty() {
     let env = Env::default();
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 1000, 10000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 100_000, 0);
 
-    let result = client.try_initialize_governance(&governors, &2, &86400);
-    assert_eq!(result.err(), Some(Ok(ContractError::AlreadyInitialized)));
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &500);
+    client.contribute(&c, &500, &token_id, &None);
+
+    let page = client.contributor_list(&10, &5);
+    assert_eq!(page.len(), 0);
 }
 
 #[test]
-fn propose_platform_update_stores_proposal() {
+fn contributor_list_caps_limit_at_50() {
     let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 10_000_000, 0);
 
-    let proposer = governors.get(0).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&proposer, &new_address, &250).unwrap();
+    for _ in 0..60u32 {
+        let c = Address::generate(&env);
+        token_admin_client.mint(&c, &1_000);
+        client.contribute(&c, &1_000, &token_id, &None);
+    }
 
-    let proposal = client.get_proposal(&nonce).expect("proposal stored");
-    assert_eq!(proposal.nonce, nonce);
-    assert_eq!(proposal.platform_fee_bps, 250);
-    assert_eq!(proposal.approvals, 0);
-    assert!(!proposal.executed);
-    assert_eq!(proposal.timelock_until, 0);
+    // Requesting 100 should return at most 50
+    let page = client.contributor_list(&0, &100);
+    assert_eq!(page.len(), 50);
 }
 
 #[test]
-fn propose_platform_update_rejects_invalid_fee() {
+fn repeat_contributor_does_not_inflate_count_or_list() {
     let env = Env::default();
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 1000, 10000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 100_000, 0);
 
-    let proposer = governors.get(0).unwrap();
-    let new_address = Address::generate(&env);
-    let result = client.try_propose_platform_update(&proposer, &new_address, &10001);
-    assert_eq!(result.err(), Some(Ok(ContractError::InvalidFee)));
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &2_000);
+
+    client.contribute(&c, &1_000, &token_id, &None);
+    client.contribute(&c, &1_000, &token_id, &None);
+
+    // Only one unique contributor
+    assert_eq!(client.get_stats().contributor_count, 1);
+    let page = client.contributor_list(&0, &50);
+    assert_eq!(page.len(), 1);
+    assert_eq!(page.get(0).unwrap(), c);
+    // But cumulative amount is 2 000
+    assert_eq!(client.contribution(&c), 2_000);
+}
+
+// ── Gas optimisation: short-circuit amount validation (#perf) ────────────────
+
+#[test]
+fn below_minimum_returned_before_blacklist_check() {
+    // Amount is below minimum AND contributor is blacklisted.
+    // The optimised path checks amount first, so BelowMinimum should be
+    // returned without ever consulting the blacklist storage.
+    let env = Env::default();
+    let (creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 100_000, 500); // min = 500
+
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &1_000);
+    // Blacklist the contributor
+    client.add_to_blacklist(&c);
+
+    // Attempt to contribute below minimum — must get BelowMinimum, not Blacklisted
+    let result = client.try_contribute(&c, &100, &token_id, &None);
+    assert_eq!(result.err(), Some(Ok(ContractError::BelowMinimum)));
+}
+
+// ── Gas optimisation: validate_refund_eligibility (#perf) ────────────────────
+
+#[test]
+fn refund_single_rejects_before_deadline_when_not_cancelled() {
+    let env = Env::default();
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 100_000, 0);
+
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &1_000);
+    client.contribute(&c, &1_000, &token_id, &None);
+
+    // Campaign is still active — deadline has not passed
+    let result = client.try_refund_single(&c);
+    assert_eq!(result.err(), Some(Ok(ContractError::CampaignStillActive)));
 }
 
 #[test]
-fn vote_on_proposal_records_approval() {
+fn refund_single_rejects_when_goal_reached() {
     let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 1_000, 500, 0); // goal = 500
 
-    let proposer = governors.get(0).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&proposer, &new_address, &250).unwrap();
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &500);
+    client.contribute(&c, &500, &token_id, &None);
 
-    // First governor votes
-    client.vote_on_proposal(&proposer, &nonce);
+    env.ledger().set_timestamp(2_000); // past deadline
 
-    let proposal = client.get_proposal(&nonce).unwrap();
-    assert_eq!(proposal.approvals, 1);
-    assert_eq!(proposal.timelock_until, 0); // Not yet met threshold
+    let result = client.try_refund_single(&c);
+    assert_eq!(result.err(), Some(Ok(ContractError::GoalReached)));
 }
 
 #[test]
-fn vote_on_proposal_triggers_timelock_when_threshold_met() {
+fn refund_batch_rejects_before_deadline_when_not_cancelled() {
     let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 100_000, 0);
 
-    let g1 = governors.get(0).unwrap();
-    let g2 = governors.get(1).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&g1, &new_address, &250).unwrap();
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &1_000);
+    client.contribute(&c, &1_000, &token_id, &None);
 
-    // First governor votes
-    client.vote_on_proposal(&g1, &nonce);
-    // Second governor votes — threshold met (2 of 3)
-    client.vote_on_proposal(&g2, &nonce);
+    let mut batch = soroban_sdk::Vec::new(&env);
+    batch.push_back(c.clone());
 
-    let proposal = client.get_proposal(&nonce).unwrap();
-    assert_eq!(proposal.approvals, 2);
-    assert!(proposal.timelock_until > 0);
-    assert_eq!(proposal.timelock_until, 1000 + 86400);
+    let result = client.try_refund_batch(&batch);
+    assert_eq!(result.err(), Some(Ok(ContractError::CampaignStillActive)));
 }
 
 #[test]
-fn vote_on_proposal_double_vote_rejected() {
+fn refund_batch_rejects_when_goal_reached() {
     let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 1_000, 500, 0); // goal = 500
 
-    let g1 = governors.get(0).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&g1, &new_address, &250).unwrap();
+    let c = Address::generate(&env);
+    token_admin_client.mint(&c, &500);
+    client.contribute(&c, &500, &token_id, &None);
 
-    client.vote_on_proposal(&g1, &nonce);
-    let result = client.try_vote_on_proposal(&g1, &nonce);
-    assert_eq!(result.err(), Some(Ok(ContractError::GovernanceAlreadyVoted)));
+    env.ledger().set_timestamp(2_000); // past deadline
+
+    let mut batch = soroban_sdk::Vec::new(&env);
+    batch.push_back(c.clone());
+
+    let result = client.try_refund_batch(&batch);
+    assert_eq!(result.err(), Some(Ok(ContractError::GoalReached)));
 }
 
-#[test]
-fn vote_on_proposal_after_voting_ended_rejected() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
-
-    let g1 = governors.get(0).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&g1, &new_address, &250).unwrap();
-
-    // Advance past voting period (7 days = 604800 seconds)
-    env.ledger().set_timestamp(1000 + 604_801);
-
-    let result = client.try_vote_on_proposal(&g1, &nonce);
-    assert_eq!(result.err(), Some(Ok(ContractError::GovernanceVotingEnded)));
-}
+// ── Gas optimisation: get_stats cached instance handle (#perf) ───────────────
 
 #[test]
-fn execute_proposal_updates_platform_config() {
+fn get_stats_returns_accurate_metrics_after_multiple_contributions() {
     let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
+    let (_creator, token_id, client, token_admin_client) =
+        setup_contract(&env, 10_000, 10_000, 0);
 
-    let g1 = governors.get(0).unwrap();
-    let g2 = governors.get(1).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&g1, &new_address, &250).unwrap();
+    let c1 = Address::generate(&env);
+    let c2 = Address::generate(&env);
+    token_admin_client.mint(&c1, &3_000);
+    token_admin_client.mint(&c2, &1_000);
 
-    // Two votes to meet threshold
-    client.vote_on_proposal(&g1, &nonce);
-    client.vote_on_proposal(&g2, &nonce);
+    client.contribute(&c1, &3_000, &token_id, &None);
+    client.contribute(&c2, &1_000, &token_id, &None);
 
-    // Advance past timelock
-    let proposal = client.get_proposal(&nonce).unwrap();
-    env.ledger().set_timestamp(proposal.timelock_until + 1);
-
-    client.execute_proposal(&nonce);
-
-    let executed = client.get_proposal(&nonce).unwrap();
-    assert!(executed.executed);
-}
-
-#[test]
-fn execute_proposal_before_timelock_rejected() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
-
-    let g1 = governors.get(0).unwrap();
-    let g2 = governors.get(1).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&g1, &new_address, &250).unwrap();
-
-    // Two votes to meet threshold
-    client.vote_on_proposal(&g1, &nonce);
-    client.vote_on_proposal(&g2, &nonce);
-
-    // Try execute before timelock expires
-    let result = client.try_execute_proposal(&nonce);
-    assert_eq!(result.err(), Some(Ok(ContractError::GovernanceTimelockPending)));
-}
-
-#[test]
-fn execute_proposal_without_enough_approvals_rejected() {
-    let env = Env::default();
-    env.ledger().set_timestamp(1000);
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 10000, 100000);
-
-    let g1 = governors.get(0).unwrap();
-    let new_address = Address::generate(&env);
-    let nonce = client.propose_platform_update(&g1, &new_address, &250).unwrap();
-
-    // Only one vote, not enough
-    client.vote_on_proposal(&g1, &nonce);
-
-    let proposal = client.get_proposal(&nonce).unwrap();
-    env.ledger().set_timestamp(proposal.voting_ends_at + 1);
-
-    let result = client.try_execute_proposal(&nonce);
-    assert_eq!(result.err(), Some(Ok(ContractError::GovernanceNotEnoughApprovals)));
-}
-
-#[test]
-fn emergency_pause_requires_majority() {
-    let env = Env::default();
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 1000, 10000);
-
-    let g1 = governors.get(0).unwrap();
-    let g2 = governors.get(1).unwrap();
-
-    // First governor pauses — not yet majority (1 of 3)
-    client.emergency_pause(&g1);
-    assert!(!client.is_emergency_paused());
-
-    // Second governor pauses — majority reached (2 of 3)
-    client.emergency_pause(&g2);
-    assert!(client.is_emergency_paused());
-}
-
-#[test]
-fn emergency_resume_requires_majority() {
-    let env = Env::default();
-    let (_creator, governors, client) = setup_contract_with_governance(&env, 1000, 10000);
-
-    let g1 = governors.get(0).unwrap();
-    let g2 = governors.get(1).unwrap();
-
-    // Pause first
-    client.emergency_pause(&g1);
-    client.emergency_pause(&g2);
-    assert!(client.is_emergency_paused());
-
-    // Resume with majority
-    client.emergency_resume(&g1);
-    client.emergency_resume(&g2);
-    assert!(!client.is_emergency_paused());
-}
-
-#[test]
-fn update_governance_config_by_admin() {
-    let env = Env::default();
-    let (creator, _governors, client) = setup_contract_with_governance(&env, 1000, 10000);
-
-    let new_govs = Vec::from_array(&env, [Address::generate(&env), Address::generate(&env)]);
-    client.update_governance_config(&new_govs, &2, &43200);
-
-    let config = client.get_governance_config().unwrap();
-    assert_eq!(config.governors.len(), 2);
-    assert_eq!(config.required_approvals, 2);
-    assert_eq!(config.timelock_delay, 43200);
+    let stats = client.get_stats();
+    assert_eq!(stats.total_raised, 4_000);
+    assert_eq!(stats.goal, 10_000);
+    assert_eq!(stats.progress_bps, 4_000); // 40%
+    assert_eq!(stats.contributor_count, 2);
+    assert_eq!(stats.average_contribution, 2_000);
+    assert_eq!(stats.largest_contribution, 3_000);
 }

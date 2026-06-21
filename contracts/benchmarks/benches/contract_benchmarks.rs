@@ -71,6 +71,37 @@ fn benchmark_contribute(c: &mut Criterion) {
             client.contribute(&contributor, &1_000, &token_id, &Some(String::from_str(&env, "Test message")));
         })
     });
+
+    // Measures the repeat-contributor path (presence flag already set — no index write).
+    c.bench_function("contribute_repeat_contributor", |b| {
+        b.iter(|| {
+            let env = Env::default();
+            let (client, token_id, token_admin_client) = create_test_campaign(&env, 1_000_000, 10_000, 100, 0);
+
+            let contributor = Address::generate(&env);
+            token_admin_client.mint(&contributor, &10_000);
+            client.contribute(&contributor, &1_000, &token_id, &None);
+            // Second contribution: skips the ContributorIndex write entirely.
+            black_box(client.contribute(&contributor, &1_000, &token_id, &None));
+        })
+    });
+
+    // Measures O(1) indexed write cost at contributor slot 49 (50th contributor).
+    c.bench_function("contribute_50th_contributor", |b| {
+        b.iter(|| {
+            let env = Env::default();
+            let (client, token_id, token_admin_client) = create_test_campaign(&env, 1_000_000, 10_000, 100, 0);
+
+            for _ in 0..49 {
+                let c = Address::generate(&env);
+                token_admin_client.mint(&c, &1_000);
+                client.contribute(&c, &1_000, &token_id, &None);
+            }
+            let last = Address::generate(&env);
+            token_admin_client.mint(&last, &1_000);
+            black_box(client.contribute(&last, &1_000, &token_id, &None));
+        })
+    });
 }
 
 fn benchmark_refund(c: &mut Criterion) {
@@ -192,5 +223,57 @@ fn benchmark_withdraw(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_contribute, benchmark_refund, benchmark_withdraw);
+fn benchmark_stats(c: &mut Criterion) {
+    c.bench_function("get_stats_empty", |b| {
+        b.iter(|| {
+            let env = Env::default();
+            let (client, _, _) = create_test_campaign(&env, 100_000, 10_000, 0, 0);
+            black_box(client.get_stats());
+        })
+    });
+
+    c.bench_function("get_stats_10_contributors", |b| {
+        b.iter(|| {
+            let env = Env::default();
+            let (client, token_id, token_admin_client) = create_test_campaign(&env, 100_000, 10_000, 0, 0);
+            for _ in 0..10 {
+                let contributor = Address::generate(&env);
+                token_admin_client.mint(&contributor, &1_000);
+                client.contribute(&contributor, &1_000, &token_id, &None);
+            }
+            black_box(client.get_stats());
+        })
+    });
+}
+
+fn benchmark_contributor_list(c: &mut Criterion) {
+    c.bench_function("contributor_list_page1_of_10", |b| {
+        b.iter(|| {
+            let env = Env::default();
+            let (client, token_id, token_admin_client) = create_test_campaign(&env, 1_000_000, 10_000, 0, 0);
+            for _ in 0..10 {
+                let contributor = Address::generate(&env);
+                token_admin_client.mint(&contributor, &1_000);
+                client.contribute(&contributor, &1_000, &token_id, &None);
+            }
+            black_box(client.contributor_list(&0, &10));
+        })
+    });
+
+    c.bench_function("contributor_list_page2_of_50", |b| {
+        b.iter(|| {
+            let env = Env::default();
+            let (client, token_id, token_admin_client) = create_test_campaign(&env, 10_000_000, 10_000, 0, 0);
+            for _ in 0..50 {
+                let contributor = Address::generate(&env);
+                token_admin_client.mint(&contributor, &1_000);
+                client.contribute(&contributor, &1_000, &token_id, &None);
+            }
+            // Second page — reads indices 25-49 only, not all 50.
+            black_box(client.contributor_list(&25, &25));
+        })
+    });
+}
+
+criterion_group!(benches, benchmark_contribute, benchmark_refund, benchmark_withdraw, benchmark_stats, benchmark_contributor_list);
 criterion_main!(benches);

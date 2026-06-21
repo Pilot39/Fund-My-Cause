@@ -326,8 +326,8 @@ impl CrowdfundContract {
         }
 
         // Persistent writes (separate storage tier)
-        let empty: Vec<Address> = Vec::new(&env);
-        env.storage().persistent().set(&KEY_CONTRIBS, &empty);
+        // Contributor list now uses indexed keys (DataKey::ContributorIndex) written
+        // per-contributor at O(1) cost; KEY_CONTRIBS Vec is no longer maintained.
 
         let mut history: Vec<GoalAdjustment> = Vec::new(&env);
         history.push_back(GoalAdjustment {
@@ -438,6 +438,26 @@ impl CrowdfundContract {
             return Err(ContractError::CampaignEnded);
         }
 
+        // ── Validate amount (short-circuit before costlier storage reads) ──────
+        // Checking min first avoids the blacklist/whitelist persistent reads
+        // for the common rejection case of an amount that's too small.
+        if amount < min {
+            return Err(ContractError::BelowMinimum);
+        }
+
+        // Read contributor's existing balance once; reuse below
+        let contrib_key = DataKey::Contribution(contributor.clone());
+        let prev_contrib: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
+
+        if max > 0 {
+            let new_total = prev_contrib
+                .checked_add(amount)
+                .ok_or(ContractError::Overflow)?;
+            if new_total > max {
+                return Err(ContractError::ExceedsMaximum);
+            }
+        }
+
         // ── Check blacklist / whitelist (persistent, per-address) ─────────────
         if env
             .storage()
@@ -457,24 +477,6 @@ impl CrowdfundContract {
                 .unwrap_or(false)
         {
             return Err(ContractError::NotWhitelisted);
-        }
-
-        // ── Validate amount ───────────────────────────────────────────────────
-        if amount < min {
-            return Err(ContractError::BelowMinimum);
-        }
-
-        // Read contributor's existing balance once; reuse below
-        let contrib_key = DataKey::Contribution(contributor.clone());
-        let prev_contrib: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
-
-        if max > 0 {
-            let new_total = prev_contrib
-                .checked_add(amount)
-                .ok_or(ContractError::Overflow)?;
-            if new_total > max {
-                return Err(ContractError::ExceedsMaximum);
-            }
         }
 
         // ── Rate limit check (reuse cached `now`) ─────────────────────────────
@@ -597,19 +599,17 @@ impl CrowdfundContract {
             env.storage()
                 .persistent()
                 .extend_ttl(&presence_key, 100, 100);
+
+            // O(1) indexed write: store address at its insertion-order index.
+            // Previously used an O(n) Vec append into KEY_CONTRIBS; with many
+            // contributors that was reading and re-serialising the entire list
+            // on every new contribution.
+            let index_key = DataKey::ContributorIndex(count);
+            env.storage().persistent().set(&index_key, &contributor);
+            env.storage().persistent().extend_ttl(&index_key, 100, 100);
+
             // Use cached `count` — single write
             inst.set(&DataKey::ContributorCount, &(count + 1));
-
-            let mut contributors: Vec<Address> = env
-                .storage()
-                .persistent()
-                .get(&KEY_CONTRIBS)
-                .unwrap_or_else(|| Vec::new(&env));
-            contributors.push_back(contributor.clone());
-            env.storage().persistent().set(&KEY_CONTRIBS, &contributors);
-            env.storage()
-                .persistent()
-                .extend_ttl(&KEY_CONTRIBS, 100, 100);
         }
 
         // Use cached `largest` — conditional single write
@@ -1163,15 +1163,12 @@ impl CrowdfundContract {
         let status: Status = inst.get(&KEY_STATUS).unwrap();
 
         if status != Status::Cancelled {
-            let deadline: u64 = inst.get(&KEY_DEADLINE).unwrap();
-            if env.ledger().timestamp() < deadline {
-                return Err(ContractError::CampaignStillActive);
-            }
-            let goal: i128 = inst.get(&KEY_GOAL).unwrap();
-            let total: i128 = inst.get(&KEY_TOTAL).unwrap();
-            if total >= goal {
-                return Err(ContractError::GoalReached);
-            }
+            validate_refund_eligibility(
+                env.ledger().timestamp(),
+                inst.get(&KEY_DEADLINE).unwrap(),
+                inst.get(&KEY_TOTAL).unwrap(),
+                inst.get(&KEY_GOAL).unwrap(),
+            )?;
         }
 
         let key = DataKey::Contribution(contributor.clone());
@@ -1215,15 +1212,12 @@ impl CrowdfundContract {
         let status: Status = inst.get(&KEY_STATUS).unwrap();
 
         if status != Status::Cancelled {
-            let deadline: u64 = inst.get(&KEY_DEADLINE).unwrap();
-            if env.ledger().timestamp() < deadline {
-                return Err(ContractError::CampaignStillActive);
-            }
-            let goal: i128 = inst.get(&KEY_GOAL).unwrap();
-            let total: i128 = inst.get(&KEY_TOTAL).unwrap();
-            if total >= goal {
-                return Err(ContractError::GoalReached);
-            }
+            validate_refund_eligibility(
+                env.ledger().timestamp(),
+                inst.get(&KEY_DEADLINE).unwrap(),
+                inst.get(&KEY_TOTAL).unwrap(),
+                inst.get(&KEY_GOAL).unwrap(),
+            )?;
         }
 
         // Cache token address once for the whole batch
@@ -1693,8 +1687,7 @@ impl CrowdfundContract {
         }
 
         // Persistent writes (separate storage tier)
-        let empty: Vec<Address> = Vec::new(&env);
-        env.storage().persistent().set(&KEY_CONTRIBS, &empty);
+        // Contributor list uses indexed keys (DataKey::ContributorIndex); no Vec initialisation needed.
 
         let mut history: Vec<GoalAdjustment> = Vec::new(&env);
         history.push_back(GoalAdjustment {
@@ -2649,6 +2642,10 @@ impl CrowdfundContract {
                 .instance()
                 .get(&DataKey::ContributorCount)
                 .unwrap();
+            // O(1) indexed write, same pattern as contribute()
+            let index_key = DataKey::ContributorIndex(count);
+            env.storage().persistent().set(&index_key, &delegator);
+            env.storage().persistent().extend_ttl(&index_key, 100, 100);
             env.storage()
                 .instance()
                 .set(&DataKey::ContributorCount, &(count + 1));
@@ -3082,18 +3079,13 @@ impl CrowdfundContract {
     /// # Progress Calculation
     /// progress_bps = (total_raised * 10_000) / goal, capped at 10_000 (100%)
     pub fn get_stats(env: Env) -> CampaignStats {
-        let contributor_count: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::ContributorCount)
-            .unwrap_or(0);
-        let largest_contribution: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::LargestContribution)
-            .unwrap_or(0);
-        let total_raised: i128 = env.storage().instance().get(&KEY_TOTAL).unwrap_or(0);
-        let goal: i128 = env.storage().instance().get(&KEY_GOAL).unwrap();
+        // Cache the instance storage handle; all four reads target the same
+        // ledger entry so a single handle avoids repeated borrow overhead.
+        let inst = env.storage().instance();
+        let contributor_count: u32 = inst.get(&DataKey::ContributorCount).unwrap_or(0);
+        let largest_contribution: i128 = inst.get(&DataKey::LargestContribution).unwrap_or(0);
+        let total_raised: i128 = inst.get(&KEY_TOTAL).unwrap_or(0);
+        let goal: i128 = inst.get(&KEY_GOAL).unwrap();
 
         let progress_bps = if goal > 0 {
             let raw = (total_raised * 10_000) / goal;
@@ -3311,20 +3303,28 @@ impl CrowdfundContract {
             (0, 0)
         };
 
-        // Calculate trending by comparing recent vs earlier contributions
-        // Get all contributors to analyze contribution patterns
-        let contributors: Vec<Address> = inst
-            .get(&KEY_CONTRIBS)
-            .unwrap_or_else(|| Vec::new(&env));
-        
+        // Calculate trending by comparing recent vs earlier contributions.
+        // Read contributor count from instance storage (already in footprint),
+        // then fetch each contributor by index from persistent storage.
+        // Previously read KEY_CONTRIBS from instance storage (a bug — contributors
+        // are written to persistent storage), so trending was always 0.
+        let contributor_count: u32 = inst.get(&DataKey::ContributorCount).unwrap_or(0);
+
         let mut recent_sum = 0i128;
         let mut earlier_sum = 0i128;
         let mut recent_count = 0u32;
         let mut earlier_count = 0u32;
         let mid_point = time_elapsed / 2;
 
-        for i in 0..contributors.len() {
-            let contributor = contributors.get(i).unwrap();
+        for i in 0..contributor_count {
+            let contributor: Address = match env
+                .storage()
+                .persistent()
+                .get::<_, Address>(&DataKey::ContributorIndex(i))
+            {
+                Some(addr) => addr,
+                None => continue,
+            };
             let history: Vec<ContributionRecord> = env
                 .storage()
                 .persistent()
@@ -3334,7 +3334,7 @@ impl CrowdfundContract {
             for j in 0..history.len() {
                 let record = history.get(j).unwrap();
                 let time_since_start = record.timestamp.saturating_sub(start_time);
-                
+
                 if time_since_start > mid_point {
                     recent_sum += record.amount;
                     recent_count += 1;
@@ -3445,23 +3445,32 @@ impl CrowdfundContract {
     /// let page2 = contributor_list(env, 10, 10);
     /// ```
     pub fn contributor_list(env: Env, offset: u32, limit: u32) -> Vec<Address> {
-        let contributors: Vec<Address> = env
+        // Read total count from instance storage (cheap — already in footprint).
+        let total_count: u32 = env
             .storage()
-            .persistent()
-            .get(&KEY_CONTRIBS)
-            .unwrap_or_else(|| Vec::new(&env));
+            .instance()
+            .get(&DataKey::ContributorCount)
+            .unwrap_or(0);
 
-        let total_count = contributors.len();
         if offset >= total_count {
             return Vec::new(&env);
         }
 
-        let capped_limit = if limit > 50 { 50 } else { limit };
+        // Cap at 50 per the original contract spec.
+        let capped_limit = limit.min(50);
         let end = (offset + capped_limit).min(total_count);
 
+        // O(page_size) reads via individual indexed keys instead of loading and
+        // deserialising the entire contributor list each time.
         let mut result = Vec::new(&env);
         for i in offset..end {
-            result.push_back(contributors.get(i).unwrap());
+            if let Some(addr) = env
+                .storage()
+                .persistent()
+                .get::<_, Address>(&DataKey::ContributorIndex(i))
+            {
+                result.push_back(addr);
+            }
         }
         result
     }
@@ -3926,11 +3935,9 @@ impl CrowdfundContract {
         let platform_config: Option<PlatformConfig> = inst.get(&KEY_PLATFORM);
         let vesting: Option<VestingSchedule> = inst.get(&KEY_VESTING);
 
-        // Reset contribution data for new campaign
-        let empty: Vec<Address> = Vec::new(&env);
-        env.storage().persistent().set(&KEY_CONTRIBS, &empty);
-
         // Reset instance storage for new campaign
+        // (Contributor indexed keys are per-address and naturally don't carry over;
+        // ContributorCount reset to 0 is sufficient to clear the paginated list.)
         inst.set(&KEY_ADMIN, &new_creator);
         inst.set(&KEY_CREATOR, &new_creator);
         inst.set(&KEY_GOAL, &new_goal);

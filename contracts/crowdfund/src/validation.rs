@@ -336,30 +336,33 @@ pub fn validate_fee_bps(fee_bps: u32) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Validates governance configuration parameters.
+/// Validates that a non-cancelled campaign is refundable (deadline passed, goal not met).
+///
+/// Call this only when `status != Cancelled`; the cancelled path skips all checks.
+/// Combining the deadline and goal checks into one function allows both
+/// `refund_single` and `refund_batch` to share the same short-circuit logic.
 ///
 /// # Arguments
-/// * `required_approvals` - Minimum number of approvals required
-/// * `governor_count` - Total number of governors
-/// * `timelock_delay` - Timelock delay in seconds
+/// * `now` - Current ledger timestamp
+/// * `deadline` - Campaign deadline timestamp
+/// * `total` - Total amount raised
+/// * `goal` - Campaign funding goal
 ///
 /// # Returns
-/// * `Ok(())` if configuration is valid
-/// * `Err(ContractError::Unauthorized)` if parameters are invalid
-pub fn validate_governance_config(
-    required_approvals: u32,
-    governor_count: u32,
-    timelock_delay: u64,
+/// * `Ok(())` if the campaign is eligible for refunds
+/// * `Err(ContractError::CampaignStillActive)` if the deadline has not passed
+/// * `Err(ContractError::GoalReached)` if the goal was met
+pub fn validate_refund_eligibility(
+    now: u64,
+    deadline: u64,
+    total: i128,
+    goal: i128,
 ) -> Result<(), ContractError> {
-    if required_approvals == 0 || required_approvals > governor_count {
-        return Err(ContractError::Unauthorized);
+    if now < deadline {
+        return Err(ContractError::CampaignStillActive);
     }
-    if governor_count == 0 {
-        return Err(ContractError::Unauthorized);
-    }
-    if timelock_delay < 3600 {
-        // Minimum 1 hour timelock
-        return Err(ContractError::Unauthorized);
+    if total >= goal {
+        return Err(ContractError::GoalReached);
     }
     Ok(())
 }

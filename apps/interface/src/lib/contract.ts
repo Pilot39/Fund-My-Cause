@@ -343,3 +343,101 @@ export async function unpauseCampaign(
 ): Promise<string> {
   return invokeContract(admin, contractId, "unpause", [], signTx);
 }
+
+// ── Gas estimation ────────────────────────────────────────────────────────────
+
+/**
+ * Estimated network fee for a contract operation, in stroops and XLM.
+ */
+export interface GasEstimate {
+  /** Minimum resource fee in stroops as reported by simulation */
+  feeStroops: number;
+  /** Human-readable fee string (e.g. "0.0001234 XLM") */
+  feeXlm: string;
+}
+
+/**
+ * Simulates a `contribute` call and returns the estimated network fee.
+ *
+ * Uses a read-only simulation (no transaction submitted) so no signing is
+ * required. The returned fee is the `minResourceFee` from the Soroban RPC
+ * simulation result — the actual fee the user will pay depends on the
+ * resource fee set during `prepareTransaction`, but this provides a
+ * transparent estimate before the user signs.
+ *
+ * @param {string} contractId - The Soroban contract address
+ * @param {string} contributor - Contributor's Stellar public key (used for footprint)
+ * @param {bigint} amount - Contribution amount in stroops
+ * @param {string} tokenId - Token contract address
+ * @returns {Promise<GasEstimate>} Estimated fee breakdown
+ * @throws {ContractError} If simulation fails
+ */
+export async function estimateContributionGas(
+  contractId: string,
+  contributor: string,
+  amount: bigint,
+  tokenId: string,
+): Promise<GasEstimate> {
+  if (!isValidContractId(contractId)) {
+    throw new ContractError(`Invalid contract ID format: ${contractId}`);
+  }
+
+  const rpc = getContractClient();
+  const contract = new Contract(contractId);
+  const account = new Account(
+    "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
+    "0",
+  );
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        "contribute",
+        new Address(contributor).toScVal(),
+        nativeToScVal(amount, { type: "i128" }),
+        new Address(tokenId).toScVal(),
+        nativeToScVal(null),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const result = await rpc.simulateTransaction(tx);
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    throw new ContractError(result.error);
+  }
+  const sim = result as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+  const feeStroops = parseInt(sim.minResourceFee ?? "0", 10);
+  const feeXlm = (feeStroops / 10_000_000).toFixed(7) + " XLM";
+  return { feeStroops, feeXlm };
+}
+
+// ── Paginated contributor access ──────────────────────────────────────────────
+
+/**
+ * Returns a page of contributor addresses from the campaign's indexed list.
+ *
+ * The contract stores contributors in O(1) indexed keys rather than a single
+ * growing Vec, so each page read is proportional only to `limit`, not to the
+ * total number of contributors. The contract caps `limit` at 50.
+ *
+ * @param {string} contractId - The Soroban contract address
+ * @param {number} offset - Zero-based start index
+ * @param {number} limit - Maximum addresses to return (capped at 50 on-chain)
+ * @returns {Promise<string[]>} Contributor Stellar addresses for the requested page
+ * @throws {ContractError} If the contract call fails
+ */
+export async function getContributorsPaginated(
+  contractId: string,
+  offset: number,
+  limit: number,
+): Promise<string[]> {
+  const raw = await simulateView(contractId, "contributor_list", [
+    nativeToScVal(offset, { type: "u32" }),
+    nativeToScVal(limit, { type: "u32" }),
+  ]);
+  return (raw as Array<unknown>).map(String);
+}
