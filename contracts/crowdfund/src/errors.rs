@@ -120,4 +120,12 @@ pub enum ContractError {
     GovernanceAlreadyExecuted = 54,
     /// Contract is emergency paused by governance
     GovernanceEmergencyPaused = 55,
+    /// Reentrancy detected (function called recursively)
+    ReentrancyDetected = 56,
+    /// Emergency pause is active
+    EmergencyPauseActive = 57,
+    /// Invalid input provided
+    InvalidInput = 58,
+    /// Requested item not found
+    NotFound = 59,
 }

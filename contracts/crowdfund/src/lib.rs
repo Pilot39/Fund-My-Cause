@@ -50,11 +50,13 @@
 #![allow(clippy::too_many_arguments)]
 
 mod errors;
+mod security;
 mod storage;
 mod types;
 mod validation;
 
 pub use errors::ContractError;
+pub use security::{ReentrancyGuard, CircuitBreaker, RateLimiter, InputValidator, AccessControl};
 pub use storage::{
     CONTRACT_VERSION, MIN_SUPPORTED_VERSION,
     KEY_ADMIN, KEY_ANALYTICS, KEY_ANALYTICS_DATA, KEY_ARCHIVED, KEY_CATEGORY, KEY_CONTRIBS,
@@ -73,6 +75,8 @@ pub use storage::{
     KEY_PERF_THRESHOLD, KEY_PERF_STATS,
     // Governance
     KEY_GOVERNANCE_CONFIG, KEY_GOVERNANCE_NONCE, KEY_EMERGENCY_PAUSE,
+    // #605 Security Hardening
+    KEY_REENTRANCY_LOCK,
 };
 pub use types::{
     CampaignAnalytics,
