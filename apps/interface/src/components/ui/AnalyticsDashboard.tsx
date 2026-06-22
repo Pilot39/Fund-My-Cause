@@ -6,6 +6,8 @@ import { CampaignData } from "@/types/soroban";
 import { LineChart } from "./LineChart";
 import { PieChart } from "./PieChart";
 import { AnalyticsExport } from "./AnalyticsExport";
+import { PredictiveAnalytics } from "./PredictiveAnalytics";
+import { useRealTimeAnalytics } from "@/hooks/useRealTimeAnalytics";
 
 interface Props {
   campaigns: CampaignData[];
@@ -44,10 +46,10 @@ function ContributionBar({ label, value, max }: { label: string; value: number; 
 export function AnalyticsDashboard({ campaigns, timeRange = "all" }: Props) {
   const filteredCampaigns = useMemo(() => {
     if (timeRange === "all") return campaigns;
-    
+
     const now = Date.now();
     const cutoffDate = new Date();
-    
+
     switch (timeRange) {
       case "7d":
         cutoffDate.setDate(cutoffDate.getDate() - 7);
@@ -61,27 +63,30 @@ export function AnalyticsDashboard({ campaigns, timeRange = "all" }: Props) {
       default:
         return campaigns;
     }
-    
+
     return campaigns.filter((c) => {
       const campaignDate = new Date(c.deadline).getTime();
       return campaignDate >= cutoffDate.getTime() && campaignDate <= now;
     });
   }, [campaigns, timeRange]);
 
+  const { analytics: realtimeCampaigns, connected, error, lastUpdated } = useRealTimeAnalytics(filteredCampaigns);
+  const displayCampaigns = realtimeCampaigns.length > 0 ? realtimeCampaigns : filteredCampaigns;
+
   const stats = useMemo(() => {
-    const totalRaised = filteredCampaigns.reduce((s, c) => s + c.raised, 0);
-    const totalGoal = filteredCampaigns.reduce((s, c) => s + c.goal, 0);
-    const active = filteredCampaigns.filter((c) => c.status === "Active").length;
-    const successful = filteredCampaigns.filter((c) => c.status === "Successful").length;
+    const totalRaised = displayCampaigns.reduce((s, c) => s + c.raised, 0);
+    const totalGoal = displayCampaigns.reduce((s, c) => s + c.goal, 0);
+    const active = displayCampaigns.filter((c) => c.status === "Active").length;
+    const successful = displayCampaigns.filter((c) => c.status === "Successful").length;
     return { totalRaised, totalGoal, active, successful };
-  }, [filteredCampaigns]);
+  }, [displayCampaigns]);
 
   const maxRaised = useMemo(
-    () => Math.max(...filteredCampaigns.map((c) => c.raised), 1),
-    [filteredCampaigns]
+    () => Math.max(...displayCampaigns.map((c) => c.raised), 1),
+    [displayCampaigns]
   );
 
-  if (filteredCampaigns.length === 0) {
+  if (displayCampaigns.length === 0) {
     return (
       <div className="text-center py-16 text-gray-500">
         <TrendingUp size={32} className="mx-auto mb-3 opacity-40" />
@@ -106,15 +111,17 @@ export function AnalyticsDashboard({ campaigns, timeRange = "all" }: Props) {
 
       {/* New chart components */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <LineChart campaigns={filteredCampaigns} />
-        <PieChart campaigns={filteredCampaigns} />
+        <LineChart campaigns={displayCampaigns} />
+        <PieChart campaigns={displayCampaigns} />
       </div>
+
+      <PredictiveAnalytics campaigns={displayCampaigns} connected={connected} lastUpdated={lastUpdated} error={error} />
 
       {/* Contribution timeline (per campaign bar chart) */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
         <h3 className="text-sm font-semibold text-gray-300">Raised per Campaign</h3>
         <div className="space-y-3">
-          {filteredCampaigns.map((c) => (
+          {displayCampaigns.map((c) => (
             <ContributionBar
               key={c.contractId}
               label={c.title}

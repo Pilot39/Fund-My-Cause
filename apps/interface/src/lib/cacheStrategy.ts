@@ -123,6 +123,20 @@ export class CacheStorage {
   }
 }
 
+const analyticsCache = new CacheStorage("fmc_analytics_");
+
+export function setCachedAnalyticsData<T>(key: string, value: T, ttl = 15_000): void {
+  analyticsCache.set(key, value, ttl);
+}
+
+export function getCachedAnalyticsData<T>(key: string): T | null {
+  return analyticsCache.get(key) as T | null;
+}
+
+export function invalidateAnalyticsCache(pattern: RegExp): void {
+  analyticsCache.invalidate(pattern);
+}
+
 /**
  * Service Worker registration and management
  */
