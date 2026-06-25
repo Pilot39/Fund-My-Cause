@@ -9,6 +9,12 @@ A decentralized crowdfunding platform built on the [Stellar](https://stellar.org
 
 ---
 
+## Roadmap
+
+Check out our public roadmap to see what's coming next!
+
+> [View the Roadmap](./docs/roadmap.md) — see our planned milestones and features.
+
 ## Architecture
 
 ![System Architecture](./docs/assets/architecture.svg)

@@ -18,6 +18,7 @@ import { ReduxProvider } from "@/store/Provider";
 import { ThemeApplier } from "@/components/ThemeApplier";
 import { ModalRenderer } from "@/components/ModalRenderer";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { CommandPaletteProvider } from "@/components/ui/CommandPaletteProvider";
 
 export const metadata: Metadata = {
   title: "Fund My Cause",
@@ -69,7 +70,9 @@ export default async function LocaleLayout({
                   <ComparisonProvider>
                     <BookmarkProvider>
                       <BreadcrumbProvider>
-                        {children}
+                        <CommandPaletteProvider>
+                          {children}
+                        </CommandPaletteProvider>
                       </BreadcrumbProvider>
                     </BookmarkProvider>
                   </ComparisonProvider>

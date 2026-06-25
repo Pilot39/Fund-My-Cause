@@ -24,7 +24,15 @@ import { DraftIndicator } from "@/components/ui/DraftIndicator";
 import { CampaignPreview } from "@/components/ui/CampaignPreview";
 import { VideoUploader } from "@/components/ui/VideoUploader";
 import type { FAQ, TeamMember } from "@/types/campaign";
-import { CheckCircle2, XCircle, FileText, X, Eye, Trash2, PlusCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  FileText,
+  X,
+  Eye,
+  Trash2,
+  PlusCircle,
+} from "lucide-react";
 import { CampaignPreviewModal } from "@/components/ui/CampaignPreviewModal";
 import { BackButton } from "@/components/ui/BackButton";
 import { CATEGORY_TAXONOMY, saveCampaignMeta } from "@/lib/categories";
@@ -80,7 +88,13 @@ const inputCls =
   "w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500";
 const labelCls = "block text-sm text-gray-600 dark:text-gray-400 mb-1";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className={labelCls}>{label}</label>
@@ -107,9 +121,17 @@ function FieldWithError({ label, error, children }: FieldWithErrorProps) {
   );
 }
 
-function Step1({ data, set }: { data: FormData; set: (k: keyof FormData, v: string) => void }) {
+function Step1({
+  data,
+  set,
+}: {
+  data: FormData;
+  set: (k: keyof FormData, v: string) => void;
+}) {
   const titleError = data.title ? validateTitle(data.title) : null;
-  const descError = data.description ? validateDescription(data.description) : null;
+  const descError = data.description
+    ? validateDescription(data.description)
+    : null;
   const goalError = data.goal ? validateGoal(data.goal) : null;
   const deadlineError = data.deadline ? validateDeadline(data.deadline) : null;
   const minContribError = data.minContribution
@@ -203,7 +225,13 @@ function Step1({ data, set }: { data: FormData; set: (k: keyof FormData, v: stri
 const MAX_SIZE = 5 * 1024 * 1024;
 const ACCEPTED = ["image/png", "image/jpeg", "image/webp"];
 
-function Step2({ data, set }: { data: FormData; set: (k: keyof FormData, v: string) => void }) {
+function Step2({
+  data,
+  set,
+}: {
+  data: FormData;
+  set: (k: keyof FormData, v: string) => void;
+}) {
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -261,7 +289,9 @@ function Step2({ data, set }: { data: FormData; set: (k: keyof FormData, v: stri
       )}
 
       {data.imageUrl && !uploading && (
-        <p className="text-xs text-gray-500 break-all">Stored as: {data.imageUrl}</p>
+        <p className="text-xs text-gray-500 break-all">
+          Stored as: {data.imageUrl}
+        </p>
       )}
 
       <Field label="Campaign Video (optional — Upload MP4/WebM or provide YouTube/Vimeo URL)">
@@ -273,7 +303,9 @@ function Step2({ data, set }: { data: FormData; set: (k: keyof FormData, v: stri
           />
           {!data.videoUrl && (
             <div className="border-t border-gray-700 pt-3">
-              <p className="text-xs text-gray-500 mb-2">Or enter a video URL directly:</p>
+              <p className="text-xs text-gray-500 mb-2">
+                Or enter a video URL directly:
+              </p>
               <input
                 type="url"
                 placeholder="https://youtube.com/watch?v=... or https://example.com/video.mp4"
@@ -284,7 +316,9 @@ function Step2({ data, set }: { data: FormData; set: (k: keyof FormData, v: stri
             </div>
           )}
           {data.videoUrl && validateVideoUrl(data.videoUrl) && (
-            <p className="text-red-400 text-xs mt-1">{validateVideoUrl(data.videoUrl)}</p>
+            <p className="text-red-400 text-xs mt-1">
+              {validateVideoUrl(data.videoUrl)}
+            </p>
           )}
           {data.videoUrl && !validateVideoUrl(data.videoUrl) && (
             <p className="text-green-400 text-xs mt-1">✓ Video URL is valid</p>
@@ -295,7 +329,15 @@ function Step2({ data, set }: { data: FormData; set: (k: keyof FormData, v: stri
   );
 }
 
-function Step3({ data, setFaqs, setTeamMembers }: { data: FormData; setFaqs: (faqs: FAQ[]) => void; setTeamMembers: (members: TeamMember[]) => void }) {
+function Step3({
+  data,
+  setFaqs,
+  setTeamMembers,
+}: {
+  data: FormData;
+  setFaqs: (faqs: FAQ[]) => void;
+  setTeamMembers: (members: TeamMember[]) => void;
+}) {
   const addFaq = () =>
     setFaqs([
       ...data.faqs,
@@ -305,7 +347,8 @@ function Step3({ data, setFaqs, setTeamMembers }: { data: FormData; setFaqs: (fa
   const updateFaq = (id: string, field: "question" | "answer", val: string) =>
     setFaqs(data.faqs.map((f) => (f.id === id ? { ...f, [field]: val } : f)));
 
-  const removeFaq = (id: string) => setFaqs(data.faqs.filter((f) => f.id !== id));
+  const removeFaq = (id: string) =>
+    setFaqs(data.faqs.filter((f) => f.id !== id));
 
   const addMember = () =>
     setTeamMembers([
@@ -335,7 +378,10 @@ function Step3({ data, setFaqs, setTeamMembers }: { data: FormData; setFaqs: (fa
           </button>
         </div>
         {data.faqs.map((faq) => (
-          <div key={faq.id} className="space-y-2 rounded-xl border border-gray-700 p-3">
+          <div
+            key={faq.id}
+            className="space-y-2 rounded-xl border border-gray-700 p-3"
+          >
             <div className="flex items-center gap-2">
               <input
                 className={inputCls + " flex-1"}
@@ -378,7 +424,10 @@ function Step3({ data, setFaqs, setTeamMembers }: { data: FormData; setFaqs: (fa
           </button>
         </div>
         {data.teamMembers.map((m) => (
-          <div key={m.id} className="space-y-2 rounded-xl border border-gray-700 p-3">
+          <div
+            key={m.id}
+            className="space-y-2 rounded-xl border border-gray-700 p-3"
+          >
             <div className="flex items-center gap-2">
               <input
                 className={inputCls + " flex-1"}
@@ -423,7 +472,13 @@ function Step3({ data, setFaqs, setTeamMembers }: { data: FormData; setFaqs: (fa
   );
 }
 
-function Step4({ data, set }: { data: FormData; set: (k: keyof FormData, v: string) => void }) {
+function Step4({
+  data,
+  set,
+}: {
+  data: FormData;
+  set: (k: keyof FormData, v: string) => void;
+}) {
   const feeError = data.feeBps ? validateFeeBps(data.feeBps) : null;
 
   return (
@@ -439,7 +494,10 @@ function Step4({ data, set }: { data: FormData; set: (k: keyof FormData, v: stri
           onChange={(e) => set("feeAddress", e.target.value)}
         />
       </Field>
-      <FieldWithError label="Fee (basis points, e.g. 250 = 2.5%)" error={feeError}>
+      <FieldWithError
+        label="Fee (basis points, e.g. 250 = 2.5%)"
+        error={feeError}
+      >
         <input
           type="number"
           min="0"
@@ -458,7 +516,9 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between text-sm py-1 border-b border-gray-800">
       <span className="text-gray-400">{label}</span>
-      <span className="text-white max-w-xs truncate text-right">{value || "—"}</span>
+      <span className="text-white max-w-xs truncate text-right">
+        {value || "—"}
+      </span>
     </div>
   );
 }
@@ -487,7 +547,9 @@ function Step5({ data }: { data: FormData }) {
       />
       <ReviewRow
         label="Team Members"
-        value={data.teamMembers.length ? `${data.teamMembers.length} added` : "—"}
+        value={
+          data.teamMembers.length ? `${data.teamMembers.length} added` : "—"
+        }
       />
       <ReviewRow label="Fee Address" value={data.feeAddress} />
       <ReviewRow label="Fee (bps)" value={data.feeBps} />
@@ -515,7 +577,10 @@ export function validateStep(step: number, data: FormData): string | null {
     const deadlineErr = validateDeadline(data.deadline);
     if (deadlineErr) return deadlineErr;
 
-    const minContribErr = validateMinContribution(data.minContribution, data.goal);
+    const minContribErr = validateMinContribution(
+      data.minContribution,
+      data.goal,
+    );
     if (minContribErr) return minContribErr;
   }
 
@@ -525,7 +590,8 @@ export function validateStep(step: number, data: FormData): string | null {
   }
 
   if (step === 3) {
-    if (data.feeAddress && !data.feeBps) return "Provide fee bps when a fee address is set.";
+    if (data.feeAddress && !data.feeBps)
+      return "Provide fee bps when a fee address is set.";
 
     const feeErr = validateFeeBps(data.feeBps);
     if (feeErr) return feeErr;
@@ -535,7 +601,9 @@ export function validateStep(step: number, data: FormData): string | null {
 }
 
 export function validateAllSteps(data: FormData): string | null {
-  return validateStep(0, data) ?? validateStep(1, data) ?? validateStep(3, data);
+  return (
+    validateStep(0, data) ?? validateStep(1, data) ?? validateStep(3, data)
+  );
 }
 
 export function CreateCampaignWizard() {
@@ -552,8 +620,15 @@ export function CreateCampaignWizard() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
-  const { hasDraft, loadDraft, saveDraft, clearDraft, saveStatus, lastSaved } =
-    useCampaignDraft({ ...data, step });
+  const {
+    hasDraft,
+    loadDraft,
+    saveDraft,
+    clearDraft,
+    saveStatus,
+    lastSaved,
+    resolveConflict,
+  } = useCampaignDraft({ ...data, step });
 
   const set = (k: keyof FormData, v: string) => {
     setData((prev) => ({ ...prev, [k]: v }));
@@ -625,8 +700,11 @@ export function CreateCampaignWizard() {
     setTxStatus("pending");
     setTxError(null);
     try {
-      const deadlineTs = BigInt(Math.floor(new Date(data.deadline).getTime() / 1000));
-      const xlmToStroops = (xlm: string) => BigInt(Math.round(Number(xlm) * 10_000_000));
+      const deadlineTs = BigInt(
+        Math.floor(new Date(data.deadline).getTime() / 1000),
+      );
+      const xlmToStroops = (xlm: string) =>
+        BigInt(Math.round(Number(xlm) * 10_000_000));
 
       const xdr = await buildInitializeTx({
         contractId: data.contractId,
@@ -647,10 +725,11 @@ export function CreateCampaignWizard() {
       try {
         const raw = localStorage.getItem("fmc:campaigns");
         const map: Record<string, string[]> = raw ? JSON.parse(raw) : {};
-        map[address!] = [...new Set([...(map[address!] ?? []), data.contractId])];
+        map[address!] = [
+          ...new Set([...(map[address!] ?? []), data.contractId]),
+        ];
         localStorage.setItem("fmc:campaigns", JSON.stringify(map));
-      } catch {
-      }
+      } catch {}
 
       clearDraft();
       setTxHash(hash);
@@ -670,9 +749,14 @@ export function CreateCampaignWizard() {
       <WalletGuard message="Connect your wallet to create a campaign.">
         {txStatus === "success" ? (
           <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 text-center px-6">
-            <CheckCircle2 size={48} className="text-green-500 dark:text-green-400" />
+            <CheckCircle2
+              size={48}
+              className="text-green-500 dark:text-green-400"
+            />
             <h2 className="text-2xl font-bold">Campaign Deployed!</h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm break-all">Tx: {txHash}</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm break-all">
+              Tx: {txHash}
+            </p>
             <button
               onClick={() => router.push("/")}
               className="mt-2 bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-xl transition text-white"
@@ -681,7 +765,13 @@ export function CreateCampaignWizard() {
             </button>
           </div>
         ) : (
-          <div className={showPreview ? "max-w-4xl mx-auto px-6 py-12" : "max-w-xl mx-auto px-6 py-12"}>
+          <div
+            className={
+              showPreview
+                ? "max-w-4xl mx-auto px-6 py-12"
+                : "max-w-xl mx-auto px-6 py-12"
+            }
+          >
             <BackButton
               fallbackPath="/"
               confirmMessage="You have unsaved changes. Are you sure you want to leave?"
@@ -691,7 +781,10 @@ export function CreateCampaignWizard() {
 
             {hasDraft && showResumeBanner && !showPreview && (
               <div className="flex items-center gap-3 mb-6 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
-                <FileText size={16} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
+                <FileText
+                  size={16}
+                  className="text-indigo-500 dark:text-indigo-400 shrink-0"
+                />
                 <p className="flex-1 text-sm text-indigo-700 dark:text-indigo-300">
                   You have an unsaved draft. Want to pick up where you left off?
                 </p>
@@ -720,16 +813,26 @@ export function CreateCampaignWizard() {
                         i < step
                           ? "bg-indigo-600 text-white"
                           : i === step
-                          ? "bg-indigo-500 text-white ring-2 ring-indigo-300"
-                          : "bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-500"
+                            ? "bg-indigo-500 text-white ring-2 ring-indigo-300"
+                            : "bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-500"
                       }`}
                     >
-                      {i < step ? "✓" : i === PREVIEW_STEP ? <Eye size={14} /> : i + 1}
+                      {i < step ? (
+                        "✓"
+                      ) : i === PREVIEW_STEP ? (
+                        <Eye size={14} />
+                      ) : (
+                        i + 1
+                      )}
                     </div>
-                    <span className="text-xs text-gray-500 hidden sm:block">{label}</span>
+                    <span className="text-xs text-gray-500 hidden sm:block">
+                      {label}
+                    </span>
                   </div>
                   {i < STEPS.length - 1 && (
-                    <div className={`flex-1 h-px ${i < step ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-700"}`} />
+                    <div
+                      className={`flex-1 h-px ${i < step ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-700"}`}
+                    />
                   )}
                 </React.Fragment>
               ))}
@@ -755,17 +858,37 @@ export function CreateCampaignWizard() {
               <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold">{STEPS[step]}</h2>
-                  <DraftIndicator saveStatus={saveStatus} lastSaved={lastSaved} onSave={handleManualSave} />
+                  <DraftIndicator
+                    saveStatus={saveStatus}
+                    lastSaved={lastSaved}
+                    onSave={handleManualSave}
+                    onResolveConflict={(resolution) => {
+                      const remoteDraft = resolveConflict(resolution);
+                      if (remoteDraft) {
+                        const { step: savedStep, ...formFields } = remoteDraft;
+                        setData(formFields as FormData);
+                        setStep(savedStep);
+                      }
+                    }}
+                  />
                 </div>
 
                 {step === 0 && <Step1 data={data} set={set} />}
                 {step === 1 && <Step2 data={data} set={set} />}
-                {step === 2 && <Step3 data={data} setFaqs={setFaqs} setTeamMembers={setTeamMembers} />}
+                {step === 2 && (
+                  <Step3
+                    data={data}
+                    setFaqs={setFaqs}
+                    setTeamMembers={setTeamMembers}
+                  />
+                )}
                 {step === 3 && <Step4 data={data} set={set} />}
                 {step === 4 && <Step5 data={data} />}
 
                 {validationError && (
-                  <p className="text-red-500 dark:text-red-400 text-sm">{validationError}</p>
+                  <p className="text-red-500 dark:text-red-400 text-sm">
+                    {validationError}
+                  </p>
                 )}
 
                 {txStatus === "error" && txError && (
