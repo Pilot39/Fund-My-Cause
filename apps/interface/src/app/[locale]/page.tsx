@@ -96,12 +96,14 @@ export default function Home() {
         <div className="flex flex-wrap justify-center gap-3">
           <Link
             href="/campaigns"
+            data-tour="discover-campaigns"
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl font-medium transition"
           >
             {t("exploreCampaigns")} <ArrowRight size={16} />
           </Link>
           <Link
             href="/create"
+            data-tour="create-campaign"
             className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-xl font-medium transition"
           >
             <PlusCircle size={16} /> {t("startCampaign")}
