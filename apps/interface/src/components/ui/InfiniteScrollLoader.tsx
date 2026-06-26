@@ -7,6 +7,7 @@ interface InfiniteScrollLoaderProps {
   isLoading: boolean;
   error: Error | null;
   hasMore: boolean;
+  /** Callback to manually retry a failed page load. */
   onRetry?: () => void;
 }
 
@@ -28,7 +29,7 @@ export function InfiniteScrollLoader({
         {onRetry && (
           <button
             onClick={onRetry}
-            className="text-xs text-[var(--color-brand)] hover:underline"
+            className="text-xs font-medium text-[var(--color-brand)] hover:underline"
           >
             Try again
           </button>
