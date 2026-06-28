@@ -82,10 +82,11 @@ export function ShareModal({ campaignId, campaignTitle, onClose }: ShareModalPro
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const trapRef = useFocusTrap(true, { onEscape: onClose }) as React.RefObject<HTMLDivElement>;
 
+  const slug = getCampaignSlug(campaignId);
   const campaignUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/campaigns/${campaignId}`
-      : `/campaigns/${campaignId}`;
+      ? `${window.location.origin}/campaigns/${slug}`
+      : `/campaigns/${slug}`;
 
   const handleCopy = async () => {
     try {
