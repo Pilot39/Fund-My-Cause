@@ -2,6 +2,8 @@
  * Input validation and sanitization utilities for campaign creation.
  */
 
+import { AppError } from "@fund-my-cause/shared-utils";
+
 const MAX_TITLE_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 1000;
 const MAX_GOAL = BigInt(9223372036854775807) / BigInt(10); // i128::MAX / 10
@@ -243,13 +245,23 @@ export interface ValidationSchema<T> {
 }
 
 /** Error thrown by {@link ValidationSchema.validate} on invalid input. */
-export class ValidationError extends Error {
+export class ValidationError extends AppError {
   readonly fieldErrors: Record<string, string>;
   readonly formErrors: string[];
 
   constructor(result: ValidationErrorResult) {
     const summary = Object.values(result.fieldErrors).join("; ");
-    super(summary || result.formErrors.join("; ") || "Validation failed.");
+    super(
+      "VALIDATION_ERROR",
+      summary || result.formErrors.join("; ") || "Validation failed.",
+      {
+        severity: "warn",
+        context: {
+          fieldErrors: result.fieldErrors,
+          formErrors: result.formErrors,
+        },
+      },
+    );
     this.name = "ValidationError";
     this.fieldErrors = result.fieldErrors;
     this.formErrors = result.formErrors;
@@ -302,7 +314,7 @@ export function stringFieldSchema(
  * Build a schema for an object whose fields are each validated by a
  * per-field schema. Field-level errors are collected into `fieldErrors`.
  */
-export function objectSchema<T extends Record<string, unknown>>(
+export function objectSchema<T extends object>(
   shape: { [K in keyof T]: ValidationSchema<T[K]> },
 ): ValidationSchema<T> {
   const run = (input: unknown): ValidationResult<T> => {
